@@ -9,6 +9,12 @@ struct Color {
 	b u8
 }
 
+struct Dimensions {
+	grid_size int
+	width     int
+	height    int
+}
+
 const height_factor = 0.5 // terminal character aspect ratio correction
 const mosaic_char = '@'
 
@@ -30,36 +36,44 @@ fn main() {
 	// Get terminal size
 	term_cols, term_rows := term.get_terminal_size()
 
-	// Dynamically compute grid_size so image fits terminal
-	grid_x := int(math.ceil(f32(img.width) / f32(term_cols)))
-	grid_y := int(math.ceil(f32(img.height) / f32(term_rows)))
-	grid_size := if grid_x > grid_y { grid_x } else { grid_y }
-
-	// Compute resized image dimensions in pixels
-	aspect_ratio := f32(img.height) / f32(img.width)
-	mut new_width := term_cols * grid_size
-	mut new_height := int(aspect_ratio * f32(new_width) * height_factor)
-
-	// Ensure resized image height fits terminal
-	if new_height > term_rows * grid_size {
-		new_height = term_rows * grid_size
-		new_width = int(f32(new_height) / (aspect_ratio * height_factor))
-	}
+	dims := compute_dimensions(img.width, img.height, term_cols, term_rows)
 
 	// Resize image
-	resized := resize_image(img, new_width, new_height)
+	resized := resize_image(img, dims.width, dims.height)
 
 	term.clear()
 	term.set_cursor_position(term.Coord{0, 0})
 
 	// Render mosaic using grid_size blocks
-	for gy in 0 .. new_height / grid_size {
-		for gx in 0 .. new_width / grid_size {
-			color := average_color_block(resized, gx * grid_size, gy * grid_size, grid_size,
-				grid_size, new_width, new_height)
+	for gy in 0 .. dims.height / dims.grid_size {
+		for gx in 0 .. dims.width / dims.grid_size {
+			color := average_color_block(resized, gx * dims.grid_size, gy * dims.grid_size,
+				dims.grid_size, dims.grid_size, dims.width, dims.height)
 			print_color_block(color)
 		}
 		println('\x1b[0m') // reset color after each line
+	}
+}
+
+// compute_dimensions Compute grid size and resized image dimensions to fit the terminal
+fn compute_dimensions(img_w int, img_h int, term_cols int, term_rows int) Dimensions {
+	grid_x := int(math.ceil(f32(img_w) / f32(term_cols)))
+	grid_y := int(math.ceil(f32(img_h) / f32(term_rows)))
+	grid_size := if grid_x > grid_y { grid_x } else { grid_y }
+
+	aspect_ratio := f32(img_h) / f32(img_w)
+	mut width := term_cols * grid_size
+	mut height := int(aspect_ratio * f32(width) * height_factor)
+
+	if height > term_rows * grid_size {
+		height = term_rows * grid_size
+		width = int(f32(height) / (aspect_ratio * height_factor))
+	}
+
+	return Dimensions{
+		grid_size: grid_size
+		width:     width
+		height:    height
 	}
 }
 
